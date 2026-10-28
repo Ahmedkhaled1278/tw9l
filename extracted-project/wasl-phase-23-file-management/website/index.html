@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101b35">
+  <meta name="description" content="وصل: تطبيق مراسلة تجريبي متصل بخادم API.">
+  <title>وصل | رسائلك في مكان واحد</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="قائمة المحادثات">
+      <div class="brand-row"><div class="brand"><span class="brand-icon" aria-hidden="true">✦</span><div><strong>وصل</strong><small>خليك قريب، مهما بَعُدت المسافات</small></div></div><button class="icon-btn theme-btn" id="themeBtn" type="button" aria-label="تبديل المظهر" title="تبديل المظهر">☾</button></div>
+      <div class="sidebar-heading"><div><span class="eyebrow">مساحتك الخاصة</span><h1>الرسائل <span class="count" id="chatCount">0</span></h1></div><div class="new-actions"><button class="new-btn" id="newGroupBtn" type="button" aria-label="إنشاء مجموعة" title="إنشاء مجموعة">♧</button><button class="new-btn" id="newChatBtn" type="button" aria-label="محادثة جديدة" title="محادثة جديدة">＋</button></div></div>
+      <label class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="ابحث عن محادثة أو شخص..." autocomplete="off" aria-label="ابحث عن محادثة أو شخص"><kbd>⌘ K</kbd></label>
+      <div class="list-label"><span>المحادثات</span><span class="live-dot" aria-hidden="true"></span></div>
+      <p class="local-notice" id="connectionNotice">جارٍ الاتصال بالخادم…</p>
+      <div class="chat-list" id="chatList" role="list"></div>
+      <div class="sidebar-bottom"><div class="profile-avatar" id="profileAvatar">؟</div><div class="profile-info"><strong id="profileName">ضيف</strong><span><i class="status-dot"></i><span id="profileEmail">غير مسجل الدخول</span></span></div><button class="icon-btn" id="accountBtn" type="button" title="الخصوصية والإشعارات والأجهزة" aria-label="إعدادات الحساب">⚙</button><button class="icon-btn" id="logoutBtn" type="button" title="تسجيل الخروج" aria-label="تسجيل الخروج">↪</button></div>
+    </aside>
+
+    <main class="conversation" id="conversation" aria-label="المحادثة الحالية">
+      <header class="conversation-header"><div class="contact-heading"><button class="icon-btn back-btn" id="backBtn" type="button" aria-label="العودة للمحادثات">←</button><div class="avatar header-avatar" id="headerAvatar"></div><div class="contact-details"><h2 id="contactName"></h2><span id="contactStatus"></span></div></div><div class="header-actions"><span class="private-badge" title="اتصال بالخادم">● <span id="liveStatus">غير متصل</span></span><button class="icon-btn more-btn" id="infoBtn" type="button" aria-label="معلومات المحادثة" title="معلومات المحادثة">ⓘ</button></div></header>
+      <div class="messages-area" id="messagesArea" role="log" aria-live="polite" aria-label="الرسائل"></div>
+      <div class="composer-wrap"><form id="messageForm" class="composer"><button class="icon-btn attach-btn" id="attachBtn" type="button" aria-label="إرفاق ملف" title="إرفاق ملف">＋</button><input id="fileInput" type="file" hidden accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain"><textarea id="messageInput" rows="1" maxlength="2000" placeholder="اكتب رسالتك هنا..." aria-label="اكتب رسالتك"></textarea><button class="icon-btn emoji-btn" id="emojiBtn" type="button" aria-label="إضافة رمز تعبيري" title="إضافة رمز تعبيري">☺</button><button class="send-btn" type="submit" aria-label="إرسال الرسالة" title="إرسال الرسالة">➤</button></form><div class="composer-hint">اضغط Enter للإرسال، و Shift + Enter لسطر جديد</div></div>
+    </main>
+  </div>
+
+  <dialog id="newChatDialog" class="modal"><form id="newChatForm" novalidate><button class="modal-close" type="button" id="closeDialog" aria-label="إغلاق">×</button><div class="modal-symbol">✦</div><h2>محادثة جديدة</h2><p>أدخل البريد الإلكتروني المسجل للشخص الآخر في وصل.</p><label for="newName">البريد الإلكتروني للشخص</label><input id="newName" name="recipientEmail" type="email" maxlength="254" placeholder="friend@example.com" required autocomplete="email" dir="ltr"><span class="field-error" id="nameError" role="alert"></span><button class="modal-submit" type="submit">ابدأ المحادثة ←</button></form></dialog>
+  <dialog id="newGroupDialog" class="modal"><form id="newGroupForm" novalidate><button class="modal-close" type="button" id="closeGroupDialog" aria-label="إغلاق">×</button><div class="modal-symbol">♧</div><h2>إنشاء مجموعة</h2><p>اكتب اسم المجموعة، ثم أدخل البريد الإلكتروني لكل عضو مسجل في وصل، كل بريد في سطر منفصل.</p><label for="groupTitle">اسم المجموعة</label><input id="groupTitle" name="title" type="text" minlength="2" maxlength="40" placeholder="فريق العمل" required><label for="groupMembers" style="margin-top:14px">بريد الأعضاء</label><textarea id="groupMembers" name="memberEmails" rows="4" maxlength="10000" placeholder="friend@example.com&#10;another@example.com" required dir="ltr"></textarea><span class="field-error" id="groupError" role="alert"></span><button class="modal-submit" type="submit">إنشاء المجموعة ←</button></form></dialog>
+  <section id="authScreen" class="auth-screen" hidden>
+    <div class="auth-card" dir="rtl">
+      <div class="brand auth-brand"><span class="brand-icon" aria-hidden="true">✦</span><div><strong>وصل</strong><small>رسائلك في مكان واحد</small></div></div>
+      <h1 id="authTitle">أهلًا بيك في وصل</h1><p id="authDescription">سجّل الدخول لعرض محادثاتك الحقيقية.</p>
+      <form id="authForm"><div id="registerNameWrap" hidden><label for="authName">الاسم</label><input id="authName" name="name" minlength="2" maxlength="40" autocomplete="name"></div>
+        <label for="authEmail">البريد الإلكتروني</label><input id="authEmail" name="email" type="email" required maxlength="254" autocomplete="email" dir="ltr">
+        <label for="authPassword">كلمة المرور</label><input id="authPassword" name="password" type="password" required minlength="10" maxlength="72" autocomplete="current-password" dir="ltr">
+        <p class="field-error" id="authError" role="alert"></p><button class="modal-submit" id="authSubmit" type="submit">تسجيل الدخول</button>
+      </form><button id="authModeBtn" class="auth-mode-btn" type="button">إنشاء حساب جديد</button>
+      <p class="auth-footnote">كلمة المرور يجب ألا تقل عن 10 أحرف. لا تشارك بيانات الدخول مع أي شخص.</p>
+    </div>
+  </section>
+  <dialog id="settingsDialog" class="settings-dialog" aria-labelledby="settingsTitle">
+    <div class="settings-layout">
+      <aside class="settings-nav">
+        <div class="settings-nav-heading"><span class="settings-mark">⚙</span><div><strong>الإعدادات</strong><small>خصّص تجربتك في وصل</small></div></div>
+        <button class="settings-tab active" type="button" data-settings-tab="general">◈ <span>عام والمظهر</span></button>
+        <button class="settings-tab" type="button" data-settings-tab="profile">♙ <span>الملف الشخصي</span></button>
+        <button class="settings-tab" type="button" data-settings-tab="privacy">◉ <span>الخصوصية</span></button>
+        <button class="settings-tab" type="button" data-settings-tab="notifications">♧ <span>الإشعارات</span></button>
+        <button class="settings-tab" type="button" data-settings-tab="sessions">▣ <span>الأجهزة والجلسات</span></button>
+        <button class="settings-tab" type="button" data-settings-tab="storage">▤ <span>التخزين</span></button>
+        <button class="settings-tab" type="button" data-settings-tab="about">✦ <span>عن وصل</span></button>
+      </aside>
+      <section class="settings-main">
+        <header class="settings-header"><div><span class="eyebrow">مساحتك على مزاجك</span><h2 id="settingsTitle">إعدادات وصل</h2><p id="settingsSubtitle">تحكّم في شكل وتجربة المراسلة.</p></div><button class="icon-btn" id="closeSettings" type="button" aria-label="إغلاق الإعدادات">×</button></header>
+        <div class="settings-content">
+          <section class="settings-panel active" data-settings-panel="general">
+            <h3>المظهر وتجربة الاستخدام</h3><p class="settings-help">الإعدادات دي محفوظة على الجهاز ده فقط.</p>
+            <div class="setting-row"><div><strong>المظهر الداكن</strong><small>مريح للعين في الإضاءة المنخفضة.</small></div><label class="switch"><input id="prefDark" type="checkbox"><span></span></label></div>
+            <div class="setting-row"><div><strong>عرض المحادثات بشكل مدمج</strong><small>مساحة أكبر للمحادثات في قائمة الرسائل.</small></div><label class="switch"><input id="prefCompact" type="checkbox"><span></span></label></div>
+            <div class="setting-row"><div><strong>الإرسال بزر Enter</strong><small>استخدم Shift + Enter لكتابة سطر جديد.</small></div><label class="switch"><input id="prefEnter" type="checkbox"><span></span></label></div>
+            <div class="setting-row"><div><strong>صوت عند وصول رسالة</strong><small>صوت بسيط أثناء فتح الموقع.</small></div><label class="switch"><input id="prefSound" type="checkbox"><span></span></label></div>
+            <div class="setting-row"><div><strong>إشعارات سطح المكتب</strong><small id="desktopPermissionNote">تحتاج إذن المتصفح، ويمكنك إيقافها في أي وقت.</small></div><label class="switch"><input id="prefDesktop" type="checkbox"><span></span></label></div>
+            <label class="settings-field" for="accentColor">لون واجهة وصل<select id="accentColor"><option value="#6658e8">بنفسجي</option><option value="#168bcb">أزرق</option><option value="#159a78">أخضر</option><option value="#d05b8b">وردي</option><option value="#c47b25">برتقالي</option></select></label>
+            <div class="settings-actions"><button class="modal-submit" id="saveGeneralSettings" type="button">حفظ التفضيلات</button><button class="settings-secondary" id="resetGeneralSettings" type="button">استعادة الافتراضي</button></div>
+          </section>
+          <section class="settings-panel" data-settings-panel="profile" hidden>
+            <h3>ملفك الشخصي</h3><p class="settings-help">الاسم بيتحفظ على حسابك. صورة الحساب واللون المميز محفوظين محليًا على هذا المتصفح فقط.</p>
+            <div class="profile-editor"><div class="profile-preview" id="profilePreview">؟</div><div class="profile-editor-actions"><strong id="profilePreviewName">اسمك في وصل</strong><small>سيتم تصغير الصورة تلقائيًا قبل الرفع (بحد أقصى 1 ميجابايت).</small><label class="settings-secondary profile-upload" for="profileImageInput">اختيار صورة</label><input id="profileImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden><button class="settings-secondary" id="removeProfileImage" type="button">إزالة الصورة</button></div></div>
+            <label class="settings-field" for="profileNameInput">الاسم الظاهر<input id="profileNameInput" type="text" minlength="2" maxlength="40" autocomplete="name" placeholder="اكتب اسمك"></label>
+            <label class="settings-field" for="profileEmailReadonly">البريد الإلكتروني<input id="profileEmailReadonly" type="email" readonly dir="ltr"></label>
+            <div class="settings-actions"><button class="modal-submit" id="saveProfileSettings" type="button">حفظ الملف الشخصي</button></div>
+            <p class="settings-help">لتغيير البريد الإلكتروني أو كلمة المرور نحتاج تدفق تحقق آمن؛ التغيير المباشر غير متاح حاليًا.</p>
+          </section>
+          <section class="settings-panel" data-settings-panel="privacy" hidden>
+            <h3>مين يقدر يشوف نشاطك؟</h3><p class="settings-help">تُطبّق الخيارات على بيانات الظهور التي يرسلها الخادم.</p>
+            <label class="settings-field">آخر ظهور<select id="privacyLastSeen"><option value="everyone">كل المستخدمين</option><option value="contacts">الأشخاص المشاركون معك في محادثة</option><option value="nobody">لا أحد</option></select></label>
+            <label class="settings-field">حالة الاتصال<select id="privacyOnline"><option value="everyone">كل المستخدمين</option><option value="contacts">الأشخاص المشاركون معك في محادثة</option><option value="nobody">لا أحد</option></select></label>
+            <div class="setting-row"><div><strong>الإشعارات داخل وصل</strong><small>تشغيل أو إيقاف إشعارات الحساب المحفوظة.</small></div><label class="switch"><input id="privacyNotifications" type="checkbox"><span></span></label></div>
+            <div class="settings-actions"><button class="modal-submit" id="savePrivacySettings" type="button">حفظ الخصوصية</button></div><p class="settings-help">ملاحظة: «الأشخاص المشاركون معك في محادثة» تُستخدم لأن وصل لا يحتوي حاليًا على دفتر جهات اتصال منفصل.</p>
+          </section>
+          <section class="settings-panel" data-settings-panel="notifications" hidden>
+            <div class="settings-section-top"><div><h3>الإشعارات المحفوظة</h3><p class="settings-help" id="notificationSummary">سجّل الدخول لعرض إشعارات حسابك.</p></div><button id="readAllNotifications" class="settings-secondary" type="button">قراءة الكل</button></div>
+            <div id="settingsNotifications" class="settings-items"><p class="settings-empty">افتح الإعدادات بعد تسجيل الدخول لعرض الإشعارات.</p></div>
+          </section>
+          <section class="settings-panel" data-settings-panel="sessions" hidden>
+            <div class="settings-section-top"><div><h3>الأجهزة والجلسات</h3><p class="settings-help">راجع جلسات تسجيل الدخول وألغِ أي جلسة لا تعرفها.</p></div><button id="refreshSessions" class="settings-secondary" type="button">تحديث</button></div>
+            <div id="settingsSessions" class="settings-items"><p class="settings-empty">سجّل الدخول لعرض الجلسات.</p></div>
+            <div class="settings-actions"><button id="revokeOtherSessions" class="settings-danger" type="button">تسجيل الخروج من الأجهزة الأخرى</button></div>
+          </section>
+          <section class="settings-panel" data-settings-panel="storage" hidden>
+            <h3>مساحة التخزين</h3><p class="settings-help">تابع حجم الملفات التي رفعتها وصورة حسابك. الحد الافتراضي للحساب 100 ميجابايت، ويمكن تغييره من إعدادات الخادم.</p>
+            <div class="storage-card"><div class="storage-summary"><strong id="storageUsed">—</strong><span id="storageQuotaLabel">جارٍ تحميل المساحة...</span></div><div class="storage-meter" role="progressbar" aria-label="استخدام مساحة التخزين" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="storageMeter"><span id="storageMeterFill"></span></div><div class="storage-breakdown"><span id="storageFiles">الملفات: —</span><span id="storageRemaining">المتبقي: —</span></div></div>
+            <div class="settings-actions"><button id="refreshStorage" class="settings-secondary" type="button">تحديث المساحة</button></div><h3 class="storage-files-heading">ملفاتي المرفوعة</h3><p class="settings-help">تقدر تحذف أي ملف رفعته بنفسك. حذف الملف بيحذف مرفقه من الرسالة ويحرر المساحة بعد نجاح تحديث قاعدة البيانات.</p><div id="settingsStorageFiles" class="settings-items"><p class="settings-empty">جارٍ تحميل الملفات...</p></div>
+          </section>
+          <section class="settings-panel" data-settings-panel="about" hidden>
+            <div class="about-mark">✦</div><h3>وصل — رسائلك في مكان واحد</h3><p class="settings-help">واجهة مراسلة عربية متصلة بخادم Wasl. إعدادات المظهر محفوظة محليًا، أما الخصوصية والجلسات والإشعارات فتُدار عبر API بعد تسجيل الدخول.</p><div class="about-facts"><span>اتصال آمن عبر API</span><span>واجهة متجاوبة للموبايل والكمبيوتر</span><span>وضع فاتح وداكن</span></div>
+          </section>
+        </div>
+        <footer class="settings-footer"><span id="settingsStatus" role="status">إعداداتك تحت سيطرتك.</span><button class="settings-secondary" id="settingsDone" type="button">تم</button></footer>
+      </section>
+    </div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

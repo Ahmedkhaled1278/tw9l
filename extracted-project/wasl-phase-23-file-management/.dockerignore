@@ -1,0 +1,12 @@
+.git
+.github
+node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.example
+!.env.production.example
+data
+uploads
+coverage
+*.zip

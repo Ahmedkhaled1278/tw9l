@@ -1,0 +1,86 @@
+name: Wasl CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wasl-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-and-json:
+    name: Static checks and JSON-backed API integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run complete test suite (JSON API; PostgreSQL tests skipped here)
+        env:
+          DATABASE_URL: ''
+          TEST_DATABASE_URL: ''
+        run: npm test
+      - name: Check JavaScript syntax
+        run: npm run check:syntax
+      - name: Check shell syntax
+        run: sh -n scripts/backup-postgres.sh scripts/restore-postgres.sh
+      - name: Verify project structure and frontend references
+        run: npm run check:static
+
+  postgres-integration:
+    name: Real PostgreSQL schema, repository and HTTP integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: wasl
+          POSTGRES_PASSWORD: wasl_test_password
+          POSTGRES_DB: wasl_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wasl -d wasl_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://wasl:wasl_test_password@localhost:5432/wasl_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Apply current fresh-install schema to real PostgreSQL
+        run: psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/001_init.sql
+      - name: Verify required schema tables and indexes
+        run: |
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT to_regclass('users'), to_regclass('conversations'), to_regclass('conversation_members'), to_regclass('messages'), to_regclass('message_receipts'), to_regclass('notifications'), to_regclass('user_sessions'), to_regclass('messages_conversation_created_idx')" | grep -q 'messages_conversation_created_idx'
+      - name: Run unit, security, JSON API and real PostgreSQL repository tests
+        env:
+          DATABASE_URL: ''
+        run: npm test
+      - name: Run HTTP integration against PostgreSQL-backed server
+        env:
+          DATABASE_URL: postgresql://wasl:wasl_test_password@localhost:5432/wasl_test
+        run: node --test tests/api-integration.test.js
+      - name: Re-check syntax and project structure
+        run: |
+          npm run check:syntax
+          sh -n scripts/backup-postgres.sh scripts/restore-postgres.sh
+          npm run check:static
+      - name: Build production container
+        run: docker build --tag wasl:${GITHUB_SHA} .

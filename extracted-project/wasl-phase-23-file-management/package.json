@@ -1,0 +1,36 @@
+{
+  "name": "wasl-messaging",
+  "version": "0.21.0",
+  "private": true,
+  "description": "Wasl messaging backend with account storage management, attachment deletion, profile avatars, privacy controls and session management",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test",
+    "test:api": "node --test tests/api-integration.test.js",
+    "migrate:json-to-postgres": "node scripts/migrate-json-to-postgres.js",
+    "test:postgres": "node --test tests/postgres-concurrency.test.js tests/postgres-integration.test.js",
+    "check:syntax": "find server scripts tests -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "check:static": "python3 tests/verify-project.py",
+    "smoke": "node scripts/smoke.js",
+    "backup:postgres": "sh scripts/backup-postgres.sh",
+    "restore:postgres": "sh scripts/restore-postgres.sh",
+    "test:api:postgres": "node --test tests/api-integration.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.2",
+    "socket.io": "^4.8.1",
+    "pg": "^8.13.1"
+  }
+}
